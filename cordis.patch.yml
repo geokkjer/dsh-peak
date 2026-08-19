@@ -1,0 +1,11 @@
+# dsh-peak bundle patch: mounts the peak/off-peak pricing indicator.
+#
+# Applied after the profile's base layer. The row's `name` is this package
+# itself: the loader imports the package entry (the host half, which registers
+# the dsh_peak_status tool), and the package's `dsh.client` declaration makes
+# the client-modules service serve /plugins/dsh-peak/client.js so the browser
+# half (the composer pill) mounts in every session.
+
+- insert:
+    - id: dsh-peak
+      name: 'dsh-peak'
