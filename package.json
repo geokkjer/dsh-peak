@@ -1,6 +1,6 @@
 {
   "name": "dsh-peak",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "DeepSeek API peak/off-peak pricing indicator: a live composer pill (red during peak, green off-peak) with a countdown to the next switch, plus a dsh_peak_status tool the agent can call to warn about cost.",
   "type": "module",
   "main": "index.js",

@@ -49,23 +49,35 @@ window.__ModuleLoader__.load({
     ].join('\n')
     document.head.append(style)
 
+    // Weekend off-peak rule, effective 2026-08-23 00:00 Beijing time
+    // (2026-08-22T16:00:00Z): Sat+Sun (Beijing) are off-peak all day; the
+    // weekday peak windows below apply Mon-Fri only.
+    var WEEKEND_OFFPEAK_START = Date.UTC(2026, 7, 22, 16, 0, 0)
+
     // Peak windows (UTC hours, half-open): 01:00-04:00 and 06:00-10:00.
     function isPeak(date) {
+      const t = date.getTime()
+      if (t >= WEEKEND_OFFPEAK_START) {
+        const bj = new Date(t + 8 * 3600000)
+        const bjDay = bj.getUTCDay()
+        if (bjDay === 0 || bjDay === 6) return false
+      }
       const h = date.getUTCHours()
       return (h >= 1 && h < 4) || (h >= 6 && h < 10)
     }
 
-    // Next pricing-window boundary strictly after `date` (epoch ms).
+    // Next instant (epoch ms) where isPeak flips: scan whole UTC hours (all
+    // boundaries are at exact hours) until the state changes.
     function nextBoundary(date) {
       const now = date.getTime()
-      const base = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
-      for (let i = 1; i <= 48; i++) {
-        const t = base + i * 3600000
-        if (t <= now) continue
-        const h = new Date(t).getUTCHours()
-        if (h === 1 || h === 4 || h === 6 || h === 10) return t
+      let t = Math.ceil(now / 3600000) * 3600000
+      for (let i = 0; i < 24 * 8; i++) {
+        const before = new Date(t - 1000)
+        const after = new Date(t)
+        if (isPeak(before) !== isPeak(after)) return t
+        t += 3600000
       }
-      return base + 48 * 3600000
+      return t
     }
 
     const pad = (n) => String(n).padStart(2, '0')
@@ -84,11 +96,14 @@ window.__ModuleLoader__.load({
       const mm = mins % 60
       const nextLabel = `${hh}h${pad(mm)}m`
       const bj = new Date(now.getTime() + 8 * 3600000)
+      const bjDay = bj.getUTCDay()
+      const weekend = bjDay === 0 || bjDay === 6
       const title = [
         'DeepSeek API pricing',
-        peak ? 'PEAK — 2× the off-peak rate' : 'OFF-PEAK — half of the peak rate',
-        `UTC ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())} · Beijing ${pad(bj.getUTCHours())}:${pad(bj.getUTCMinutes())}`,
-        'Peak windows (UTC): 01:00-04:00 + 06:00-10:00',
+        weekend ? 'OFF-PEAK all weekend (Sat+Sun Beijing)' : (peak ? 'PEAK — 2× the off-peak rate' : 'OFF-PEAK — half of the peak rate'),
+        `UTC ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())} · Beijing ${pad(bj.getUTCHours())}:${pad(bj.getUTCMinutes())} (${weekend ? 'weekend' : 'weekday'})`,
+        'Weekday peak windows (UTC): 01:00-04:00 + 06:00-10:00',
+        'Weekends (Sat+Sun Beijing): off-peak all day',
         `Next switch in ${nextLabel}`,
       ].join('\n')
       return React.createElement('span', {
@@ -107,8 +122,7 @@ window.__ModuleLoader__.load({
     exports.inject = ['slots']
 
     function apply(ctx) {
-      const slots = ctx.get('slots')
-      if (slots === undefined) return
+      const slots = ctx.slots
       const timer = ctx.get('timer')
       slots.inject('conversation.input.left', () => slots.register(
         { name: 'conversation.input.left', id: 'dsh-peak', order: 200, label: 'DeepSeek pricing' },
